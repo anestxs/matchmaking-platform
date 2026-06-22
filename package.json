@@ -1,0 +1,17 @@
+{
+  "name": "matchmaking-platform",
+  "version": "1.0.0",
+  "description": "A competitive matchmaking platform for team-based games — handling users, teams, skill-based matchmaking, real-time lobbies/chat, and tournament brackets.",
+  "author": "Zahar Kshyvak",
+  "license": "ISC",
+  "private": true,
+  "packageManager": "pnpm@11.8.0",
+  "devDependencies": {
+    "turbo": "^2.9.18"
+  }, 
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint"
+  }
+}
