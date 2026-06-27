@@ -7,8 +7,9 @@
   "private": true,
   "packageManager": "pnpm@11.8.0",
   "devDependencies": {
+    "@types/node": "^24.13.2",
     "turbo": "^2.9.18"
-  }, 
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
