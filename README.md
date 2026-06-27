@@ -67,12 +67,12 @@ Shared event contracts live in `packages/contracts` so producer and consumer can
 never drift.
 
 ### Service responsibilities
-| Module / service | Stack | Responsibility |
-|---|---|---|
-| Core API | NestJS + `@nestjs/jwt` | HTTP/CRUD, auth, business-rule validation |
-| Matchmaking | NestJS + Redis (RabbitMQ when split out) | pool solver, balance, server selection |
-| Realtime | NestJS + Socket.io + Redis pub/sub | WebSocket connections, chat, lobbies |
-| Frontend | Next.js | client application |
+- **Core API** (NestJS + `@nestjs/jwt`) — HTTP/CRUD, auth, business-rule validation.
+- **Matchmaking** (NestJS + Redis; RabbitMQ when split out) — pool solver, balance,
+  server selection.
+- **Realtime** (NestJS + Socket.io + Redis pub/sub) — WebSocket connections, chat,
+  lobbies.
+- **Frontend** (Next.js) — client application.
 
 Distributed tracing, structured logging, and metrics are required once modules are
 split across process boundaries.
@@ -101,7 +101,7 @@ the whole pool — this cannot be expressed by processing one message at a time.
   dedupes on a stable key so redelivery cannot create duplicate matches.
 
 ### Rating / balancing
-Uses **Glicko-2 or TrueSkill** (rating + uncertainty), not average MMR. Balancing
+Uses the **OpenSkill** model (rating + uncertainty), not average MMR. Balancing
 considers rating distribution/variance, not just the mean.
 
 ---
