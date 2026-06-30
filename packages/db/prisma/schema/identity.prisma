@@ -1,0 +1,37 @@
+enum Mode {
+  ONE_V_ONE
+  TWO_V_TWO
+  THREE_V_THREE
+  FOUR_V_FOUR
+  FIVE_V_FIVE
+}
+
+model User {
+  id          String       @id @default(uuid(7))
+  discordId   String       @unique
+  nickname    String
+  tag         String
+  displayName String?
+  avatarUrl   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  ratings     UserRating[]
+
+  @@unique([nickname, tag])
+}
+
+model UserRating {
+  id          String   @id @default(uuid(7))
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode        Mode
+  mu          Float
+  sigma       Float
+  gamesPlayed Int      @default(0)
+  wins        Int      @default(0)
+  losses      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, mode])
+}

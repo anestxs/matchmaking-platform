@@ -210,6 +210,9 @@ importers:
       '@types/node':
         specifier: ^24.13.2
         version: 24.13.2
+      prettier:
+        specifier: ^3.8.4
+        version: 3.8.4
       turbo:
         specifier: ^2.9.18
         version: 2.9.18
