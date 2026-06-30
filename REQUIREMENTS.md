@@ -117,7 +117,7 @@ All modes are available for tournaments.
 A **TournamentEntry** (a competitor = team of the mode's size) can be formed
 three ways:
 1. **Invite** — the creator/participants invite users by **nickname + tag**
-   (e.g. `zahar#1234`).
+   (e.g. `zahar#1234`). Invited users join only after accepting (see §10).
 2. **Random** — an empty bracket slot can be filled with a randomly found
    player via a dedicated button in the bracket.
 3. **Queue** — any user can start a queue to **find a tournament** for a
@@ -142,13 +142,59 @@ three ways:
 
 ---
 
-## 8. Data Model (entity summary)
+## 8. Friends & Social
+
+- A user can send a **friend request** to another user. The request stays
+  **pending** until the recipient accepts or declines it (see §10); only
+  accepted requests become friendships.
+- Friendship is **mutual**. Friends can be invited to parties and tournaments,
+  and can message each other directly (see §9).
+- Removing a friend ends the friendship for both sides.
+
+---
+
+## 9. Chat
+
+- Friends can exchange **direct (1:1) messages**.
+- A user can create a **group chat** with multiple members; a group has a name
+  and an owner.
+- A **Conversation** is either direct or group; **ConversationMembers** are its
+  participants; **Messages** belong to a conversation and record sender, body,
+  and time.
+- Messages are stored in **PostgreSQL**. Real-time delivery is handled by the
+  realtime layer (Socket.io); see README.
+
+---
+
+## 10. Invitations
+
+- **No invitation is an immediate join.** Party invitations, tournament
+  invitations, and friend requests all follow the same flow: the target user
+  receives a **pending** invitation they can **accept** or **decline**.
+- A pending invitation surfaces to the invitee as a notification/popup.
+  **Accepting** performs the join (adds them to the party, the tournament entry,
+  or the friend list); **declining** dismisses it.
+- Every invitation carries a **status**: pending, accepted, or declined.
+
+---
+
+## 11. Data Model (entity summary)
 
 Grouped by domain. Field lists are indicative.
 
 **Identity**
 - `User` — discordId (unique), nickname, tag, displayName, avatarUrl; unique(nickname, tag)
 - `UserRating` — userId, mode, mu, sigma, gamesPlayed, wins; unique(userId, mode) — displayed MMR = mu − 3·sigma
+
+**Social & Chat**
+- `Friendship` — requesterId→User, addresseeId→User, status; unique(requesterId, addresseeId)
+- `Conversation` — type (DIRECT | GROUP), name? (groups), ownerId?→User
+- `ConversationMember` — conversationId→Conversation, userId→User; unique(conversationId, userId)
+- `Message` — conversationId→Conversation, senderId→User, body, createdAt
+
+**Invitations** (one table per domain, sharing a common status)
+- `PartyInvite` — partyId→Party, inviterId→User, inviteeId→User, status
+- `TournamentInvite` — tournamentId→Tournament, inviterId→User, inviteeId→User, status
 
 **Matchmaking**
 - `Party` — mode, leaderId→User
@@ -162,15 +208,14 @@ Grouped by domain. Field lists are indicative.
 - `Tournament` — name, mode, creatorId→User, status, format, maxEntries, startAt
 - `TournamentEntry` — tournamentId, source (INVITE | RANDOM | QUEUE)
 - `TournamentEntryMember` — entryId, userId
-- `TournamentInvite` — tournamentId, inviterId, inviteeId, status
 - `TournamentMatch` — tournamentId, round, slot, entryA?, entryB?, winnerEntryId?, nextMatchId?, matchId?
 
 **Enums**: `Mode`, `MatchStatus`, `TournamentStatus`, `TournamentFormat`,
-`InviteStatus`, `EntrySource`
+`EntrySource`, `FriendshipStatus`, `InviteStatus`, `ConversationType`
 
 ---
 
-## 9. Design Decisions
+## 12. Design Decisions
 
 - Groups are assembled per-match and per-tournament; there is no persistent
   team/clan entity.
@@ -181,3 +226,11 @@ Grouped by domain. Field lists are indicative.
 - Ratings use the OpenSkill model (`mu`/`sigma`); the displayed MMR is
   `mu − 3·sigma`, and rating computation is isolated behind a swappable
   interface.
+- Friend requests, party invitations, and tournament invitations all use one
+  accept/decline flow; an invitee is never auto-added.
+- Party and tournament invitations are modeled as separate per-domain tables
+  (`PartyInvite`, `TournamentInvite`) sharing a common status; friend requests
+  are represented by the pending status of a `Friendship` row. A user's
+  pending-invitation feed is assembled by querying across these.
+- Chat messages are stored in PostgreSQL; real-time delivery is handled by the
+  realtime layer.
