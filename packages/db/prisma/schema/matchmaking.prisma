@@ -1,0 +1,89 @@
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum MatchStatus {
+  PENDING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+model Party {
+  id               String            @id @default(uuid(7))
+  mode             Mode
+  leaderId         String
+  leader           User              @relation(fields: [leaderId], references: [id], onDelete: Cascade)
+  members          PartyMember[]
+  invitations      PartyInvitation[]
+  matchTeamMembers MatchTeamMember[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model PartyMember {
+  id       String   @id @default(uuid(7))
+  partyId  String
+  party    Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+
+  @@unique([partyId, userId])
+}
+
+model PartyInvitation {
+  id        String           @id @default(uuid(7))
+  partyId   String
+  party     Party            @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  inviterId String
+  inviter   User             @relation("PartyInvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeId String
+  invitee   User             @relation("PartyInvitationInvitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  status    InvitationStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([partyId, inviteeId])
+}
+
+model Match {
+  id           String      @id @default(uuid(7))
+  mode         Mode
+  status       MatchStatus
+  teams        MatchTeam[] @relation("MatchTeams")
+  winnerTeamId String?     @unique
+  winnerTeam   MatchTeam?  @relation("MatchWinnerTeam", fields: [winnerTeamId], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model MatchTeam {
+  id        String            @id @default(uuid(7))
+  matchId   String
+  match     Match             @relation("MatchTeams", fields: [matchId], references: [id], onDelete: Cascade)
+  wonMatch  Match?            @relation("MatchWinnerTeam")
+  captainId String?
+  captain   User?             @relation(fields: [captainId], references: [id], onDelete: SetNull)
+  avgMmr    Int
+  members   MatchTeamMember[]
+}
+
+model MatchTeamMember {
+  id            String    @id @default(uuid(7))
+  matchTeamId   String
+  matchTeam     MatchTeam @relation(fields: [matchTeamId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  originPartyId String?
+  originParty   Party?    @relation(fields: [originPartyId], references: [id], onDelete: SetNull)
+  muBefore      Float
+  sigmaBefore   Float
+  muAfter       Float?
+  sigmaAfter    Float?
+  joinedAt      DateTime  @default(now())
+
+  @@unique([matchTeamId, userId])
+}
