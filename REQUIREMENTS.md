@@ -94,11 +94,10 @@ or per-tournament.
 
 ## 5. Matches
 
-- A **Match** has: mode, status (pending / live / completed / cancelled),
-  timestamps, and a winning side.
-- A Match has two **MatchTeams** (sides A and B), each with a captain and an
-  average MMR.
-- Each MatchTeam contains **MatchParticipants** linking users to the side,
+- A **Match** has: mode, status (pending / ongoing / completed / cancelled),
+  timestamps, and a winning team.
+- A Match has two **MatchTeams**, each with a captain and an average MMR.
+- Each MatchTeam contains **MatchTeamMembers** linking users to the side,
   optionally recording the **party they came from** and their MMR snapshot.
 
 ---
@@ -193,15 +192,15 @@ Grouped by domain. Field lists are indicative.
 - `Message` — conversationId→Conversation, senderId→User, body, createdAt
 
 **Invitations** (one table per domain, sharing a common status)
-- `PartyInvite` — partyId→Party, inviterId→User, inviteeId→User, status
-- `TournamentInvite` — tournamentId→Tournament, inviterId→User, inviteeId→User, status
+- `PartyInvitation` — partyId→Party, inviterId→User, inviteeId→User, status
+- `TournamentInvitation` — tournamentId→Tournament, inviterId→User, inviteeId→User, status
 
 **Matchmaking**
 - `Party` — mode, leaderId→User
 - `PartyMember` — partyId, userId; unique(partyId, userId)
 - `Match` — mode, status, winnerTeamId?, timestamps
-- `MatchTeam` — matchId, side, captainId→User, avgMmr
-- `MatchParticipant` — matchTeamId, userId, originPartyId?, muBefore, sigmaBefore, muAfter?, sigmaAfter?
+- `MatchTeam` — matchId, captainId→User, avgMmr
+- `MatchTeamMember` — matchTeamId, userId, originPartyId?, muBefore, sigmaBefore, muAfter?, sigmaAfter?
 - *(live queue pool = Redis, not a table)*
 
 **Tournaments**
@@ -211,7 +210,7 @@ Grouped by domain. Field lists are indicative.
 - `TournamentMatch` — tournamentId, round, slot, entryA?, entryB?, winnerEntryId?, nextMatchId?, matchId?
 
 **Enums**: `Mode`, `MatchStatus`, `TournamentStatus`, `TournamentFormat`,
-`EntrySource`, `FriendshipStatus`, `InviteStatus`, `ConversationType`
+`EntrySource`, `FriendshipStatus`, `InvitationStatus`, `ConversationType`
 
 ---
 
@@ -229,7 +228,7 @@ Grouped by domain. Field lists are indicative.
 - Friend requests, party invitations, and tournament invitations all use one
   accept/decline flow; an invitee is never auto-added.
 - Party and tournament invitations are modeled as separate per-domain tables
-  (`PartyInvite`, `TournamentInvite`) sharing a common status; friend requests
+  (`PartyInvitation`, `TournamentInvitation`) sharing a common status; friend requests
   are represented by the pending status of a `Friendship` row. A user's
   pending-invitation feed is assembled by querying across these.
 - Chat messages are stored in PostgreSQL; real-time delivery is handled by the
