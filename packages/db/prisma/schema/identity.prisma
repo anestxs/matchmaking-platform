@@ -6,33 +6,52 @@ enum Mode {
   FIVE_V_FIVE
 }
 
+enum AuthProvider {
+  DISCORD
+}
+
 model User {
-  id                       String                @id @default(uuid(7))
-  discordId                String                @unique
-  nickname                 String
-  tag                      String
-  displayName              String?
-  avatarUrl                String?
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
-  ratings                  UserRating[]
-  sentRequests             Friendship[]          @relation("FriendshipRequester")
-  receivedRequests         Friendship[]          @relation("FriendshipAddressee")
-  partiesLeader            Party[]
-  partyMembers             PartyMember[]
-  sentPartyInvitations     PartyInvitation[]     @relation("PartyInvitationInviter")
-  receivedPartyInvitations PartyInvitation[]     @relation("PartyInvitationInvitee")
-  captainOf                MatchTeam[]
-  matchMemberships         MatchTeamMember[]
-  conversationOwner        Conversation[]
-  conversationMembers      ConversationMember[]
-  conversationMessages     ConversationMessage[]
-  tournamentEntries          TournamentEntryMember[]
-  createdTournaments         Tournament[]     
-  sentTournamentInvitations     TournamentInvitation[] @relation("TournamentInvitationInviter")
-  receivedTournamentInvitations TournamentInvitation[] @relation("TournamentInvitationInvitee")
+  id                            String                  @id @default(uuid(7))
+  email                         String?                 @unique
+  passwordHash                  String?
+  emailVerifiedAt               DateTime?
+  oauthAccounts                 OAuthAccount[]
+  nickname                      String
+  tag                           String
+  displayName                   String?
+  avatarUrl                     String?
+  createdAt                     DateTime                @default(now())
+  updatedAt                     DateTime                @updatedAt
+  ratings                       UserRating[]
+  sentRequests                  Friendship[]            @relation("FriendshipRequester")
+  receivedRequests              Friendship[]            @relation("FriendshipAddressee")
+  partiesLeader                 Party[]
+  partyMembers                  PartyMember[]
+  sentPartyInvitations          PartyInvitation[]       @relation("PartyInvitationInviter")
+  receivedPartyInvitations      PartyInvitation[]       @relation("PartyInvitationInvitee")
+  captainOf                     MatchTeam[]
+  matchMemberships              MatchTeamMember[]
+  conversationOwner             Conversation[]
+  conversationMembers           ConversationMember[]
+  conversationMessages          ConversationMessage[]
+  tournamentEntries             TournamentEntryMember[]
+  createdTournaments            Tournament[]
+  sentTournamentInvitations     TournamentInvitation[]  @relation("TournamentInvitationInviter")
+  receivedTournamentInvitations TournamentInvitation[]  @relation("TournamentInvitationInvitee")
 
   @@unique([nickname, tag])
+}
+
+model OAuthAccount {
+  id                String       @id @default(uuid(7))
+  userId            String
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          AuthProvider
+  providerAccountId String
+  createdAt         DateTime     @default(now())
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
 }
 
 model UserRating {
