@@ -58,6 +58,7 @@ model Match {
   winnerTeam   MatchTeam?  @relation("MatchWinnerTeam", fields: [winnerTeamId], references: [id], onDelete: SetNull)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  tournamentMatch TournamentMatch?
 }
 
 model MatchTeam {
