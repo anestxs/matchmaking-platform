@@ -7,23 +7,26 @@ enum Mode {
 }
 
 model User {
-  id                       String            @id @default(uuid(7))
-  discordId                String            @unique
+  id                       String                @id @default(uuid(7))
+  discordId                String                @unique
   nickname                 String
   tag                      String
   displayName              String?
   avatarUrl                String?
-  createdAt                DateTime          @default(now())
-  updatedAt                DateTime          @updatedAt
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
   ratings                  UserRating[]
-  sentRequests             Friendship[]      @relation("FriendshipRequester")
-  receivedRequests         Friendship[]      @relation("FriendshipAddressee")
+  sentRequests             Friendship[]          @relation("FriendshipRequester")
+  receivedRequests         Friendship[]          @relation("FriendshipAddressee")
   partiesLeader            Party[]
   partyMembers             PartyMember[]
-  sentPartyInvitations     PartyInvitation[] @relation("PartyInvitationInviter")
-  receivedPartyInvitations PartyInvitation[] @relation("PartyInvitationInvitee")
+  sentPartyInvitations     PartyInvitation[]     @relation("PartyInvitationInviter")
+  receivedPartyInvitations PartyInvitation[]     @relation("PartyInvitationInvitee")
   captainOf                MatchTeam[]
   matchMemberships         MatchTeamMember[]
+  conversationOwner        Conversation[]
+  conversationMembers      ConversationMember[]
+  conversationMessages     ConversationMessage[]
 
   @@unique([nickname, tag])
 }

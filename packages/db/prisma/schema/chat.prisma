@@ -1,0 +1,47 @@
+enum ConversationType {
+    DIRECT
+    GROUP
+}
+
+enum ConversationRole {
+    MEMBER
+    ADMIN
+}
+
+model Conversation {
+    id        String                @id @default(uuid(7))
+    type      ConversationType
+    name      String?
+    ownerId   String?
+    owner     User?                 @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+    members   ConversationMember[]
+    messages  ConversationMessage[]
+    createdAt DateTime              @default(now())
+    updatedAt DateTime              @updatedAt
+}
+
+model ConversationMember {
+    id             String           @id @default(uuid(7))
+    conversationId String
+    conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+    userId         String
+    user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+    role           ConversationRole @default(MEMBER)
+    joinedAt       DateTime         @default(now())
+    updatedAt      DateTime         @updatedAt
+
+    @@unique([conversationId, userId])
+}
+
+model ConversationMessage {
+    id             String       @id @default(uuid(7))
+    conversationId String
+    conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+    senderId       String?
+    sender         User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+    body           String
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@index([conversationId, createdAt])
+}
