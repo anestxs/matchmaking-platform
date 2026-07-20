@@ -27,6 +27,10 @@ model User {
   conversationOwner        Conversation[]
   conversationMembers      ConversationMember[]
   conversationMessages     ConversationMessage[]
+  tournamentEntries          TournamentEntryMember[]
+  createdTournaments         Tournament[]     
+  sentTournamentInvitations     TournamentInvitation[] @relation("TournamentInvitationInviter")
+  receivedTournamentInvitations TournamentInvitation[] @relation("TournamentInvitationInvitee")
 
   @@unique([nickname, tag])
 }

@@ -108,19 +108,22 @@ All modes are available for tournaments.
 
 ### 6.1 Creation
 - **Any user** can create a tournament, choosing its **mode**.
+- On creation the tournament is assigned a unique **8-digit join code**
+  (`entryCode`) used for open joining (see §6.2).
 - Format: **single-elimination** bracket. `format` is modeled as an enum so
   other formats (double-elimination, round-robin, swiss) can be added later
   without a rewrite.
 
 ### 6.2 Populating entries
 A **TournamentEntry** (a competitor = team of the mode's size) can be formed
-three ways:
-1. **Invite** — the creator/participants invite users by **nickname + tag**
-   (e.g. `zahar#1234`). Invited users join only after accepting (see §10).
-2. **Random** — an empty bracket slot can be filled with a randomly found
-   player via a dedicated button in the bracket.
-3. **Queue** — any user can start a queue to **find a tournament** for a
-   specifically selected mode and be placed into one.
+two ways:
+1. **Invitation** — the creator invites users, either from their **friends** or
+   by **nickname + tag** (e.g. `zahar#1234`). Both paths are only different ways
+   to pick a user; each produces the same pending invitation, and the invitee
+   joins only after accepting (see §10).
+2. **Code** — anyone who has the tournament's **8-digit join code** (`entryCode`)
+   can join directly. This is an immediate self-join, **not** a pending
+   invitation.
 
 ### 6.3 Bracket
 - The bracket is a tree of **TournamentMatch** nodes (round, slot, the two
@@ -155,11 +158,16 @@ three ways:
 ## 9. Chat
 
 - Friends can exchange **direct (1:1) messages**.
-- A user can create a **group chat** with multiple members; a group has a name
-  and an owner.
+- A user can create a **group chat** with multiple members; a group has a name,
+  an **owner**, and any number of **admins**.
+- Each **ConversationMember** has a **role** (member or admin) — admins are
+  members with elevated rights. The owner is tracked on the conversation itself.
+- If the owner leaves or is deleted, ownership transfers to the
+  **longest-tenured admin**; if there are no admins, the conversation is left
+  ownerless. This transfer is **application logic**, not a database action.
 - A **Conversation** is either direct or group; **ConversationMembers** are its
-  participants; **Messages** belong to a conversation and record sender, body,
-  and time.
+  participants; **ConversationMessages** belong to a conversation and record
+  sender, body, and time.
 - Messages are stored in **PostgreSQL**. Real-time delivery is handled by the
   realtime layer (Socket.io); see README.
 
@@ -187,9 +195,9 @@ Grouped by domain. Field lists are indicative.
 
 **Social & Chat**
 - `Friendship` — requesterId→User, addresseeId→User, status; unique(requesterId, addresseeId)
-- `Conversation` — type (DIRECT | GROUP), name? (groups), ownerId?→User
-- `ConversationMember` — conversationId→Conversation, userId→User; unique(conversationId, userId)
-- `Message` — conversationId→Conversation, senderId→User, body, createdAt
+- `Conversation` — type (DIRECT | GROUP), name? (groups), ownerId?→User (SetNull)
+- `ConversationMember` — conversationId→Conversation, userId→User, role (MEMBER | ADMIN); unique(conversationId, userId)
+- `ConversationMessage` — conversationId→Conversation, senderId?→User (SetNull), body, createdAt
 
 **Invitations** (one table per domain, sharing a common status)
 - `PartyInvitation` — partyId→Party, inviterId→User, inviteeId→User, status
@@ -204,13 +212,14 @@ Grouped by domain. Field lists are indicative.
 - *(live queue pool = Redis, not a table)*
 
 **Tournaments**
-- `Tournament` — name, mode, creatorId→User, status, format, maxEntries, startAt
-- `TournamentEntry` — tournamentId, source (INVITE | RANDOM | QUEUE)
+- `Tournament` — name, mode, creatorId?→User (SetNull), status, format, maxEntries, startAt, entryCode (unique, 8-digit)
+- `TournamentEntry` — tournamentId, source (INVITATION | CODE)
 - `TournamentEntryMember` — entryId, userId
 - `TournamentMatch` — tournamentId, round, slot, entryA?, entryB?, winnerEntryId?, nextMatchId?, matchId?
 
 **Enums**: `Mode`, `MatchStatus`, `TournamentStatus`, `TournamentFormat`,
-`EntrySource`, `FriendshipStatus`, `InvitationStatus`, `ConversationType`
+`EntrySource`, `FriendshipStatus`, `InvitationStatus`, `ConversationType`,
+`ConversationRole`
 
 ---
 
@@ -227,6 +236,12 @@ Grouped by domain. Field lists are indicative.
   interface.
 - Friend requests, party invitations, and tournament invitations all use one
   accept/decline flow; an invitee is never auto-added.
+- Tournament entries are populated only by creator invitations (chosen from
+  friends or by nickname + tag) and by an 8-digit join code; there is no random
+  fill and no matchmaking queue for tournaments.
+- A group conversation has one owner and any number of admins (member role); if
+  the owner leaves, ownership passes to the longest-tenured admin, otherwise the
+  conversation becomes ownerless — handled in application logic, not a DB action.
 - Party and tournament invitations are modeled as separate per-domain tables
   (`PartyInvitation`, `TournamentInvitation`) sharing a common status; friend requests
   are represented by the pending status of a `Friendship` row. A user's
