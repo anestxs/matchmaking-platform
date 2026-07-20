@@ -135,11 +135,31 @@ two ways:
 
 ---
 
-## 7. Identity
+## 7. Identity & Authentication
 
-- Users authenticate via **Discord OAuth2**.
 - A user is identified by **nickname + tag** (`zahar#1234`); the
-  `(nickname, tag)` pair is unique.
+  `(nickname, tag)` pair is unique. The **tag is chosen by the user**, not
+  auto-generated.
+- Authentication supports **multiple methods**, none of which is a mandatory
+  "primary":
+  - **Password** — the login identifier is either the **email** or the
+    **`nickname#tag`** pair.
+  - **Discord SSO** (OAuth2).
+- A user may register with any single method and **link the others later** in
+  settings (add a password/email if they signed up with Discord, or link
+  Discord if they signed up with a password).
+- Auth methods are modeled apart from the core identity: a password
+  (`passwordHash`) lives on the user, while each SSO link is a separate
+  **OAuthAccount** row (provider + provider account id), so additional providers
+  can be added without reshaping the user.
+- **Email is optional** — even for password users, since `nickname#tag` can be
+  the login identifier — and is unique when present. It is **normalized
+  (lowercased) before storage** so uniqueness is meaningful.
+- **Invariant**: a user must always retain at least one working login method —
+  a password, or at least one linked OAuth account.
+- **Account-linking safety**: an SSO login is **never auto-merged** into an
+  existing account by matching email; linking happens only while already
+  authenticated (or through a verified-email flow).
 - Sessions and refresh-token rotation are handled via Redis (see README).
 
 ---
@@ -189,8 +209,9 @@ two ways:
 
 Grouped by domain. Field lists are indicative.
 
-**Identity**
-- `User` — discordId (unique), nickname, tag, displayName, avatarUrl; unique(nickname, tag)
+**Identity & Auth**
+- `User` — nickname, tag, displayName, avatarUrl, email? (unique), passwordHash?, emailVerifiedAt?; unique(nickname, tag)
+- `OAuthAccount` — userId→User (Cascade), provider (DISCORD), providerAccountId; unique(provider, providerAccountId), unique(userId, provider)
 - `UserRating` — userId, mode, mu, sigma, gamesPlayed, wins; unique(userId, mode) — displayed MMR = mu − 3·sigma
 
 **Social & Chat**
@@ -217,14 +238,20 @@ Grouped by domain. Field lists are indicative.
 - `TournamentEntryMember` — entryId, userId
 - `TournamentMatch` — tournamentId, round, slot, entryA?, entryB?, winnerEntryId?, nextMatchId?, matchId?
 
-**Enums**: `Mode`, `MatchStatus`, `TournamentStatus`, `TournamentFormat`,
-`EntrySource`, `FriendshipStatus`, `InvitationStatus`, `ConversationType`,
-`ConversationRole`
+**Enums**: `Mode`, `AuthProvider`, `MatchStatus`, `TournamentStatus`,
+`TournamentFormat`, `EntrySource`, `FriendshipStatus`, `InvitationStatus`,
+`ConversationType`, `ConversationRole`
 
 ---
 
 ## 12. Design Decisions
 
+- Authentication is multi-method (password via email or `nickname#tag`, plus
+  Discord SSO); no method is a mandatory primary, and users can link additional
+  methods later. The password lives on the user; SSO links are separate
+  `OAuthAccount` rows so new providers can be added without schema changes. A
+  user must always keep at least one login method, and an SSO login is never
+  auto-linked to an existing account by email.
 - Groups are assembled per-match and per-tournament; there is no persistent
   team/clan entity.
 - Party state is stored in PostgreSQL; the live matchmaking queue is held in
