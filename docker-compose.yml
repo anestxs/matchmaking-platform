@@ -16,6 +16,21 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  redis:
+    image: redis:7
+    container_name: matchmaking-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - matchmaking-redis-data:/data
+    command: ['redis-server', '--appendonly', 'yes']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 volumes:
   matchmaking-postgres-data:
+  matchmaking-redis-data:
