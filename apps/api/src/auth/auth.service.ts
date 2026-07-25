@@ -32,8 +32,9 @@ export class AuthService {
         omit: { passwordHash: true },
       });
       const accessToken = await this.tokens.issueAccessToken(user.id);
+      const refreshToken = await this.tokens.issueRefreshTokeh(user.id);
 
-      return { user, accessToken };
+      return { user, accessToken, refreshToken };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -62,7 +63,15 @@ export class AuthService {
 
     const { passwordHash: _removed, ...safeUser } = user;
     const accessToken = await this.tokens.issueAccessToken(user.id);
-    return { user: safeUser, accessToken };
+    const refreshToken = await this.tokens.issueRefreshTokeh(user.id);
+
+    return { user: safeUser, accessToken, refreshToken };
+  }
+
+  async logout(refreshToken: string | undefined) {
+    if (refreshToken) {
+      await this.tokens.revokeRefreshToken(refreshToken);
+    }
   }
 
   async me(userId: string) {
@@ -74,6 +83,10 @@ export class AuthService {
       throw new UnauthorizedException();
     }
     return user;
+  }
+
+  async refresh(refreshToken: string) {
+    return this.tokens.rotateRefreshToken(refreshToken);
   }
 
   private async findByIdentifier(identifier: string) {
