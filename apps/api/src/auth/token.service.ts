@@ -11,6 +11,11 @@ interface RefreshPayload {
   jti: string;
 }
 
+interface LinkTokenPayload {
+  sub: string;
+  jti: string;
+}
+
 @Injectable()
 export class TokenService {
   constructor(
@@ -78,18 +83,18 @@ export class TokenService {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('Invalid refresh token.');
     }
 
     const raw = await this.redis.get(this.sessionKey(payload.sid));
     if (!raw) {
-      throw new UnauthorizedException('Session expired');
+      throw new UnauthorizedException('Session expired.');
     }
     const session = JSON.parse(raw) as { userId: string; jti: string };
 
     if (session.jti !== payload.jti) {
       await this.redis.del(this.sessionKey(payload.sid));
-      throw new UnauthorizedException('Refresh token reuse detected');
+      throw new UnauthorizedException('Refresh token reuse detected.');
     }
 
     const newJti = randomUUID();
@@ -101,5 +106,48 @@ export class TokenService {
     );
     const accessToken = await this.issueAccessToken(session.userId);
     return { accessToken, refreshToken };
+  }
+
+  async issueLinkToken(userId: string): Promise<string> {
+    const jti = randomUUID();
+    await this.redis.set(
+      this.linkTokenKey(jti),
+      userId,
+      'EX',
+      this.linkTtlSeconds(),
+    );
+
+    return this.jwt.signAsync(
+      { sub: userId, jti },
+      {
+        secret: this.config.getOrThrow<string>('JWT_LINK_SECRET'),
+        expiresIn: this.linkTtlSeconds(),
+      },
+    );
+  }
+
+  async verifyLinkToken(token: string): Promise<string> {
+    let payload: LinkTokenPayload;
+    try {
+      payload = await this.jwt.verifyAsync<LinkTokenPayload>(token, {
+        secret: this.config.getOrThrow<string>('JWT_LINK_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired link token.');
+    }
+
+    const deleted = await this.redis.del(this.linkTokenKey(payload.jti));
+    if (deleted === 0) {
+      throw new UnauthorizedException('Link token already used.');
+    }
+
+    return payload.sub;
+  }
+
+  private linkTokenKey(jti: string) {
+    return `link_token:${jti}`;
+  }
+  private linkTtlSeconds(): number {
+    return Number(this.config.getOrThrow('JWT_LINK_TTL'));
   }
 }

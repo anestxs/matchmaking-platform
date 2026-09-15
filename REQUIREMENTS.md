@@ -163,14 +163,20 @@ two ways:
   - a **nickname derived from the provider profile** (sanitised to the allowed
     nickname character set and length) and a **randomly generated tag**;
     a taken `(nickname, tag)` pair is retried with a fresh tag;
-  - the provider's **email, but only if the provider reports it as verified**;
-    an unverified provider email is discarded. A stored provider email counts
-    as verified, so the user does not have to confirm it again.
+  - the provider's **email, which is mandatory**: the sign-up is **rejected**
+    when the provider supplies no email or reports it as unverified, and the
+    user is told to add and confirm an email on the provider side first. A
+    provider email accepted this way counts as verified, so the user does not
+    have to confirm it again.
   - The generated nickname and tag are editable in profile settings, which is
     how an SSO user takes ownership of their identity.
+- Consequently, **every SSO-created account has a verified email**, unlike a
+  password account, where email stays optional.
 - A user who signed up through SSO has **no password**, so email is not yet a
   usable login identifier for them; it becomes one once they set a password in
-  settings.
+  settings. A password set this way does **not** carry an email verification:
+  an address the user types in is unverified until they confirm it, whereas one
+  accepted from a provider already is.
 - **Account-linking safety**: an SSO login is **never auto-merged** into an
   existing account by matching email; linking happens only while already
   authenticated (or through a verified-email flow).
@@ -178,6 +184,10 @@ two ways:
   another account, the sign-up is **rejected with an explicit error** rather
   than linked or silently stripped. The user is directed to log in with their
   existing method and link the provider from settings.
+- Because an SSO login **fails inside a browser redirect**, every rejection
+  above (missing or unverified email, an email already in use) has to come back
+  to the user as a **redirect to the frontend carrying an error code**, not as
+  a raw API error response.
 - An SSO login completes through a **browser redirect**, so the resulting
   session must be handed over **without placing any token in the redirect
   URL**; the refresh session is established the same way as for password
@@ -275,6 +285,9 @@ Grouped by domain. Field lists are indicative.
   user must always keep at least one login method, and an SSO login is never
   auto-linked to an existing account by email — an email already in use makes
   the SSO sign-up fail explicitly instead.
+- SSO sign-up requires a verified provider email, so every SSO account is
+  reachable by email from the start; password accounts keep email optional
+  because `nickname#tag` already identifies them.
 - SSO sign-up generates the nickname and tag from the provider profile rather
   than interrupting the flow with an onboarding step; both stay editable in
   profile settings, which keeps identity under the user's control without
