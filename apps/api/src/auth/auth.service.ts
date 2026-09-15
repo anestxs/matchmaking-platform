@@ -60,7 +60,7 @@ export class AuthService {
     const passwordMatches = await argon2.verify(hash, password);
 
     if (!user || !user.passwordHash || !passwordMatches) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Invalid credentials.');
     }
 
     const { passwordHash: _removed, ...safeUser } = user;
@@ -91,13 +91,6 @@ export class AuthService {
     return this.tokens.rotateRefreshToken(refreshToken);
   }
 
-  async issueTokens(userId: string) {
-    const accessToken = await this.tokens.issueAccessToken(userId);
-    const refreshToken = await this.tokens.issueRefreshToken(userId);
-
-    return { accessToken, refreshToken };
-  }
-
   private async findByIdentifier(identifier: string) {
     if (identifier.includes('#')) {
       const [nickname, tag] = identifier.split('#');
@@ -121,6 +114,7 @@ export class AuthService {
 
   async validateDiscordUser(profile: Profile) {
     const { id: discordId, username, global_name, email } = profile;
+
     const account = await this.prisma.oAuthAccount.findUnique({
       where: {
         provider_providerAccountId: {
@@ -134,6 +128,12 @@ export class AuthService {
       return { userId: account.userId };
     }
 
+    if (!email) {
+      throw new ConflictException(
+        'Email is required for Discord authentication. Please ensure your Discord account has a verified email address.',
+      );
+    }
+
     const sanitedNickname = this.nicknameSanitizer(username);
 
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -144,9 +144,9 @@ export class AuthService {
           data: {
             nickname: sanitedNickname,
             tag: tag,
-            email: email?.toLowerCase(),
+            email: email.toLowerCase(),
             displayName: global_name ?? sanitedNickname,
-            emailVerifiedAt: email ? new Date() : null,
+            emailVerifiedAt: new Date(),
             oauthAccounts: {
               create: {
                 provider: 'DISCORD',
@@ -189,5 +189,60 @@ export class AuthService {
     return sanitizedNickname.length < 3
       ? sanitizedNickname.padEnd(3, '0')
       : sanitizedNickname;
+  }
+
+  async setPassword(userId: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    if (user.passwordHash) {
+      throw new ConflictException('Password is already set.');
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+
+    return await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+      omit: { passwordHash: true },
+    });
+  }
+
+  async linkDiscordAccount(userId: string, profile: Profile) {
+    try {
+      await this.prisma.oAuthAccount.create({
+        data: {
+          userId,
+          provider: 'DISCORD',
+          providerAccountId: profile.id,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.oAuthAccount.findUnique({
+          where: { userId_provider: { userId, provider: 'DISCORD' } },
+        });
+
+        if (existing) {
+          throw new ConflictException(
+            'This user already has a linked Discord account.',
+          );
+        }
+
+        throw new ConflictException(
+          'This Discord account is already linked to another user.',
+        );
+      }
+
+      throw error;
+    }
   }
 }

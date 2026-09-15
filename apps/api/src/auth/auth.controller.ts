@@ -19,6 +19,8 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { DiscordAuthGuard } from './guards/discord-auth.guard';
 import { TokenService } from './token.service';
+import { SetPasswordDto } from './dto/set-password.dto';
+import { DiscordLinkGuard } from './guards/discord-link.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -80,7 +82,7 @@ export class AuthController {
   ) {
     const token = req.cookies?.['refresh_token'] as string | undefined;
     if (!token) {
-      throw new UnauthorizedException('No refresh token');
+      throw new UnauthorizedException('No refresh token.');
     }
 
     const { accessToken, refreshToken } = await this.authService.refresh(token);
@@ -102,7 +104,9 @@ export class AuthController {
   @Public()
   @UseGuards(DiscordAuthGuard)
   @Get('discord')
-  async discordAuth() {}
+  async discordAuth() {
+    // This route is protected by the DiscordAuthGuard, which will handle the redirect to Discord for authentication.
+  }
 
   @Public()
   @UseGuards(DiscordAuthGuard)
@@ -114,5 +118,37 @@ export class AuthController {
     const refreshToken = await this.tokens.issueRefreshToken(user.userId);
     this.setRefreshCookie(res, refreshToken);
     res.redirect(this.config.getOrThrow<string>('FRONTEND_URL'));
+  }
+
+  @Post('password')
+  @HttpCode(HttpStatus.OK)
+  async setPassword(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: SetPasswordDto,
+  ) {
+    return this.authService.setPassword(user.userId, dto.password);
+  }
+
+  @Post('discord/link/token')
+  @HttpCode(HttpStatus.OK)
+  async createDiscordLinkToken(@CurrentUser() user: { userId: string }) {
+    const token = await this.tokens.issueLinkToken(user.userId);
+    return { token };
+  }
+
+  @Public()
+  @UseGuards(DiscordLinkGuard)
+  @Get('discord/link')
+  async discordLink() {
+    // This route is protected by the DiscordLinkGuard, which will handle the redirect to Discord for linking.
+  }
+
+  @Public()
+  @UseGuards(DiscordLinkGuard)
+  @Get('discord/link/callback')
+  discordLinkCallback(@Res() res: Response) {
+    res.redirect(
+      `${this.config.getOrThrow<string>('FRONTEND_URL')}/settings?linked=discord`,
+    );
   }
 }
