@@ -9,6 +9,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { DiscordStrategy } from './strategies/discord.strategy';
+import { DiscordLinkStrategy } from './strategies/discord-link.strategy';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { DiscordStrategy } from './strategies/discord.strategy';
     TokenService,
     JwtStrategy,
     DiscordStrategy,
+    DiscordLinkStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
 })
