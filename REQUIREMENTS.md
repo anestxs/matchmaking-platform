@@ -139,7 +139,8 @@ two ways:
 
 - A user is identified by **nickname + tag** (`zahar#1234`); the
   `(nickname, tag)` pair is unique. The **tag is chosen by the user**, not
-  auto-generated.
+  auto-generated. The one exception is SSO sign-up, where both are generated
+  (see below) and can be changed afterwards in profile settings.
 - Authentication supports **multiple methods**, none of which is a mandatory
   "primary":
   - **Password** — the login identifier is either the **email** or the
@@ -157,9 +158,30 @@ two ways:
   (lowercased) before storage** so uniqueness is meaningful.
 - **Invariant**: a user must always retain at least one working login method —
   a password, or at least one linked OAuth account.
+- **SSO sign-up provisioning** — when an SSO login has no matching
+  `OAuthAccount`, a new user is created with:
+  - a **nickname derived from the provider profile** (sanitised to the allowed
+    nickname character set and length) and a **randomly generated tag**;
+    a taken `(nickname, tag)` pair is retried with a fresh tag;
+  - the provider's **email, but only if the provider reports it as verified**;
+    an unverified provider email is discarded. A stored provider email counts
+    as verified, so the user does not have to confirm it again.
+  - The generated nickname and tag are editable in profile settings, which is
+    how an SSO user takes ownership of their identity.
+- A user who signed up through SSO has **no password**, so email is not yet a
+  usable login identifier for them; it becomes one once they set a password in
+  settings.
 - **Account-linking safety**: an SSO login is **never auto-merged** into an
   existing account by matching email; linking happens only while already
   authenticated (or through a verified-email flow).
+- Consequently, if an SSO sign-up carries an email that already belongs to
+  another account, the sign-up is **rejected with an explicit error** rather
+  than linked or silently stripped. The user is directed to log in with their
+  existing method and link the provider from settings.
+- An SSO login completes through a **browser redirect**, so the resulting
+  session must be handed over **without placing any token in the redirect
+  URL**; the refresh session is established the same way as for password
+  login, and the client exchanges it for an access token.
 - Sessions and refresh-token rotation are handled via Redis (see README).
 
 ---
@@ -251,7 +273,12 @@ Grouped by domain. Field lists are indicative.
   methods later. The password lives on the user; SSO links are separate
   `OAuthAccount` rows so new providers can be added without schema changes. A
   user must always keep at least one login method, and an SSO login is never
-  auto-linked to an existing account by email.
+  auto-linked to an existing account by email — an email already in use makes
+  the SSO sign-up fail explicitly instead.
+- SSO sign-up generates the nickname and tag from the provider profile rather
+  than interrupting the flow with an onboarding step; both stay editable in
+  profile settings, which keeps identity under the user's control without
+  blocking first login.
 - Groups are assembled per-match and per-tournament; there is no persistent
   team/clan entity.
 - Party state is stored in PostgreSQL; the live matchmaking queue is held in
