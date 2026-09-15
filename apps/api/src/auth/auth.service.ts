@@ -9,6 +9,8 @@ import * as argon2 from 'argon2';
 import { Prisma } from '@matchmaking/db';
 import { TokenService } from './token.service';
 import { LoginDto } from './dto/login.dto';
+import { Profile } from 'passport-discord';
+import { randomInt } from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -32,7 +34,7 @@ export class AuthService {
         omit: { passwordHash: true },
       });
       const accessToken = await this.tokens.issueAccessToken(user.id);
-      const refreshToken = await this.tokens.issueRefreshTokeh(user.id);
+      const refreshToken = await this.tokens.issueRefreshToken(user.id);
 
       return { user, accessToken, refreshToken };
     } catch (error) {
@@ -43,9 +45,9 @@ export class AuthService {
         const target = error.meta?.target as string[] | undefined;
 
         if (target?.includes('email')) {
-          throw new ConflictException('Email is already in use');
+          throw new ConflictException('Email is already in use.');
         }
-        throw new ConflictException('This nickname and tag are already taken');
+        throw new ConflictException('This nickname and tag are already taken.');
       }
       throw error;
     }
@@ -63,7 +65,7 @@ export class AuthService {
 
     const { passwordHash: _removed, ...safeUser } = user;
     const accessToken = await this.tokens.issueAccessToken(user.id);
-    const refreshToken = await this.tokens.issueRefreshTokeh(user.id);
+    const refreshToken = await this.tokens.issueRefreshToken(user.id);
 
     return { user: safeUser, accessToken, refreshToken };
   }
@@ -89,6 +91,13 @@ export class AuthService {
     return this.tokens.rotateRefreshToken(refreshToken);
   }
 
+  async issueTokens(userId: string) {
+    const accessToken = await this.tokens.issueAccessToken(userId);
+    const refreshToken = await this.tokens.issueRefreshToken(userId);
+
+    return { accessToken, refreshToken };
+  }
+
   private async findByIdentifier(identifier: string) {
     if (identifier.includes('#')) {
       const [nickname, tag] = identifier.split('#');
@@ -108,5 +117,77 @@ export class AuthService {
       this.dummyHash = await argon2.hash('timing-attack-placeholder');
     }
     return this.dummyHash;
+  }
+
+  async validateDiscordUser(profile: Profile) {
+    const { id: discordId, username, global_name, email } = profile;
+    const account = await this.prisma.oAuthAccount.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: 'DISCORD',
+          providerAccountId: discordId,
+        },
+      },
+    });
+
+    if (account) {
+      return { userId: account.userId };
+    }
+
+    const sanitedNickname = this.nicknameSanitizer(username);
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const tag = this.generateTag();
+
+        const user = await this.prisma.user.create({
+          data: {
+            nickname: sanitedNickname,
+            tag: tag,
+            email: email?.toLowerCase(),
+            displayName: global_name ?? sanitedNickname,
+            emailVerifiedAt: email ? new Date() : null,
+            oauthAccounts: {
+              create: {
+                provider: 'DISCORD',
+                providerAccountId: discordId,
+              },
+            },
+          },
+        });
+        return { userId: user.id };
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          const target = error.meta?.target as string[] | undefined;
+
+          if (target?.includes('email')) {
+            throw new ConflictException('Email is already in use.');
+          }
+          continue; // Retry on unique constraint violation for nickname and tag
+        }
+        throw error;
+      }
+    }
+    throw new ConflictException(
+      'Failed to generate a unique nickname and tag after multiple attempts.',
+    );
+  }
+
+  private generateTag(): string {
+    return randomInt(0, 10000).toString().padStart(4, '0');
+  }
+
+  private nicknameSanitizer(nickname: string | undefined): string {
+    const sanitizedNickname =
+      nickname
+        ?.replace(/[^a-zA-Z0-9_]/g, '')
+        .slice(0, 20)
+        .toLowerCase() || 'user';
+    return sanitizedNickname.length < 3
+      ? sanitizedNickname.padEnd(3, '0')
+      : sanitizedNickname;
   }
 }

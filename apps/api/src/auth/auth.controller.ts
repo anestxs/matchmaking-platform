@@ -9,6 +9,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -16,12 +17,15 @@ import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
+import { DiscordAuthGuard } from './guards/discord-auth.guard';
+import { TokenService } from './token.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly config: ConfigService,
+    private readonly tokens: TokenService,
   ) {}
 
   @Public()
@@ -93,5 +97,22 @@ export class AuthController {
       path: '/auth',
       maxAge: Number(this.config.getOrThrow<string>('JWT_REFRESH_TTL')) * 1000,
     });
+  }
+
+  @Public()
+  @UseGuards(DiscordAuthGuard)
+  @Get('discord')
+  async discordAuth() {}
+
+  @Public()
+  @UseGuards(DiscordAuthGuard)
+  @Get('discord/callback')
+  async discordAuthCallback(
+    @CurrentUser() user: { userId: string },
+    @Res() res: Response,
+  ) {
+    const refreshToken = await this.tokens.issueRefreshToken(user.userId);
+    this.setRefreshCookie(res, refreshToken);
+    res.redirect(this.config.getOrThrow<string>('FRONTEND_URL'));
   }
 }

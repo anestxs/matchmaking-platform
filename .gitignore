@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 .turbo
 
 packages/db/generated/prisma
+
+# Local roadmap / working notes
+ROADMAP.local.md
