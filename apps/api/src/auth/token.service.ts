@@ -23,7 +23,7 @@ export class TokenService {
     return this.jwt.signAsync({ sub: userId });
   }
 
-  async issueRefreshTokeh(userId: string): Promise<string> {
+  async issueRefreshToken(userId: string): Promise<string> {
     const sid = randomUUID();
     const jti = randomUUID();
 
