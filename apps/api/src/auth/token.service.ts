@@ -1,9 +1,14 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { REDIS_CLIENT } from '../redis/redis.module';
 import Redis from 'ioredis';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
 
 interface RefreshPayload {
   sub: string;
@@ -41,7 +46,7 @@ export class TokenService {
       const payload = await this.jwt.verifyAsync<RefreshPayload>(token, {
         secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
-      await this.redis.del(this.sessionKey(payload.sid));
+      await this.removeSession(payload.sid, payload.sub);
     } catch {
       return;
     }
@@ -51,17 +56,36 @@ export class TokenService {
     return `refresh_session:${sid}`;
   }
 
+  private userSessionsKey(userId: string): string {
+    return `user_sessions:${userId}`;
+  }
+
   private refreshTtlSeconds(): number {
     return Number(this.config.getOrThrow('JWT_REFRESH_TTL'));
   }
 
   private async storeSession(sid: string, userId: string, jti: string) {
-    await this.redis.set(
-      this.sessionKey(sid),
-      JSON.stringify({ userId, jti }),
-      'EX',
-      this.refreshTtlSeconds(),
-    );
+    const ttl = this.refreshTtlSeconds();
+    const now = Math.floor(Date.now() / 1000);
+    const indexKey = this.userSessionsKey(userId);
+
+    await this.redis
+      .multi()
+      .set(this.sessionKey(sid), JSON.stringify({ userId, jti }), 'EX', ttl)
+      .zadd(indexKey, now + ttl, sid)
+      .zremrangebyscore(indexKey, '-inf', now)
+      .expire(indexKey, ttl)
+      .exec();
+  }
+
+  private async removeSession(sid: string, userId: string) {
+    const indexKey = this.userSessionsKey(userId);
+
+    await this.redis
+      .multi()
+      .del(this.sessionKey(sid))
+      .zrem(indexKey, sid)
+      .exec();
   }
 
   private signRefreshToken(userId: string, sid: string, jti: string) {
@@ -93,7 +117,7 @@ export class TokenService {
     const session = JSON.parse(raw) as { userId: string; jti: string };
 
     if (session.jti !== payload.jti) {
-      await this.redis.del(this.sessionKey(payload.sid));
+      await this.removeSession(payload.sid, session.userId);
       throw new UnauthorizedException('Refresh token reuse detected.');
     }
 
@@ -149,5 +173,111 @@ export class TokenService {
   }
   private linkTtlSeconds(): number {
     return Number(this.config.getOrThrow('JWT_LINK_TTL'));
+  }
+
+  async revokeAllSessions(userId: string, exceptSid?: string): Promise<void> {
+    const indexKey = this.userSessionsKey(userId);
+    const sids = await this.redis.zrange(indexKey, 0, -1);
+    const toRevoke = sids.filter((sid) => sid !== exceptSid);
+
+    if (toRevoke.length === 0) {
+      return;
+    }
+
+    const pipeline = this.redis.multi();
+    for (const sid of toRevoke) {
+      pipeline.del(this.sessionKey(sid));
+    }
+    pipeline.zrem(indexKey, ...toRevoke);
+    await pipeline.exec();
+  }
+
+  async readSessionId(token: string | undefined): Promise<string | undefined> {
+    if (!token) {
+      return undefined;
+    }
+
+    try {
+      const payload = await this.jwt.verifyAsync<RefreshPayload>(token, {
+        secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),
+      });
+      return payload.sid;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async issueOneTimeToken(
+    prefix: string,
+    userId: string,
+    ttlSeconds: number,
+  ): Promise<string> {
+    const token = randomBytes(32).toString('base64url');
+
+    await this.redis.set(
+      this.oneTimeTokenKey(prefix, token),
+      userId,
+      'EX',
+      ttlSeconds,
+    );
+
+    return token;
+  }
+
+  async consumeOneTimeToken(
+    prefix: string,
+    token: string,
+  ): Promise<string | null> {
+    return await this.redis.getdel(this.oneTimeTokenKey(prefix, token));
+  }
+
+  private oneTimeTokenKey(prefix: string, token: string): string {
+    const hash = createHash('sha256').update(token).digest('hex');
+
+    return `${prefix}:${hash}`;
+  }
+
+  async issueEmailVerificationToken(userId: string): Promise<string> {
+    return this.issueOneTimeToken(
+      'email_verification',
+      userId,
+      this.emailVerificationTtlSeconds(),
+    );
+  }
+
+  async consumeEmailVerificationToken(token: string): Promise<string> {
+    const userId = await this.consumeOneTimeToken('email_verification', token);
+
+    if (!userId) {
+      throw new BadRequestException('Invalid or expired verification token.');
+    }
+
+    return userId;
+  }
+
+  private emailVerificationTtlSeconds(): number {
+    return Number(this.config.getOrThrow<string>('EMAIL_VERIFICATION_TTL'));
+  }
+
+  async issuePasswordResetToken(userId: string): Promise<string> {
+    return this.issueOneTimeToken(
+      'password_reset',
+      userId,
+      this.passwordResetTtlSeconds(),
+    );
+  }
+
+  async consumePasswordResetToken(token: string): Promise<string> {
+    const userId = await this.consumeOneTimeToken('password_reset', token);
+
+    if (!userId) {
+      throw new BadRequestException('Invalid or expired password reset token.');
+    }
+
+    return userId;
+  }
+
+  private passwordResetTtlSeconds(): number {
+    return Number(this.config.getOrThrow<string>('PASSWORD_RESET_TTL'));
   }
 }

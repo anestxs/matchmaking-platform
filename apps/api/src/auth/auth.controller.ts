@@ -2,6 +2,7 @@ import { AuthService } from './auth.service';
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -21,6 +22,11 @@ import { DiscordAuthGuard } from './guards/discord-auth.guard';
 import { TokenService } from './token.service';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { DiscordLinkGuard } from './guards/discord-link.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { seconds, Throttle } from '@nestjs/throttler';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -30,6 +36,7 @@ export class AuthController {
     private readonly tokens: TokenService,
   ) {}
 
+  @Throttle({ default: { limit: 5, ttl: seconds(60) } })
   @Public()
   @Post('register')
   async register(
@@ -43,6 +50,7 @@ export class AuthController {
     return { user, accessToken };
   }
 
+  @Throttle({ default: { limit: 10, ttl: seconds(60) } })
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -65,7 +73,7 @@ export class AuthController {
     await this.authService.logout(token);
 
     res.clearCookie('refresh_token', { path: '/auth' });
-    return { sucess: true };
+    return { success: true };
   }
 
   @Get('me')
@@ -104,7 +112,7 @@ export class AuthController {
   @Public()
   @UseGuards(DiscordAuthGuard)
   @Get('discord')
-  async discordAuth() {
+  discordAuth() {
     // This route is protected by the DiscordAuthGuard, which will handle the redirect to Discord for authentication.
   }
 
@@ -122,7 +130,7 @@ export class AuthController {
 
   @Post('password')
   @HttpCode(HttpStatus.OK)
-  async setPassword(
+  setPassword(
     @CurrentUser() user: { userId: string },
     @Body() dto: SetPasswordDto,
   ) {
@@ -139,7 +147,7 @@ export class AuthController {
   @Public()
   @UseGuards(DiscordLinkGuard)
   @Get('discord/link')
-  async discordLink() {
+  discordLink() {
     // This route is protected by the DiscordLinkGuard, which will handle the redirect to Discord for linking.
   }
 
@@ -150,5 +158,59 @@ export class AuthController {
     res.redirect(
       `${this.config.getOrThrow<string>('FRONTEND_URL')}/settings?linked=discord`,
     );
+  }
+
+  @Delete('discord/unlink')
+  @HttpCode(HttpStatus.OK)
+  unlinkDiscord(@CurrentUser() user: { userId: string }) {
+    return this.authService.unlinkDiscordAccount(user.userId);
+  }
+
+  @Post('password/change')
+  @HttpCode(HttpStatus.OK)
+  async changePassword(
+    @CurrentUser() user: { userId: string },
+    @Body() dto: ChangePasswordDto,
+    @Req() req: Request,
+  ) {
+    const refreshToken = req.cookies?.['refresh_token'] as string | undefined;
+    const currentSid = await this.tokens.readSessionId(refreshToken);
+
+    return this.authService.changePassword(
+      user.userId,
+      dto.currentPassword,
+      dto.newPassword,
+      currentSid,
+    );
+  }
+
+  @Public()
+  @Post('email/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Post('email/verify/request')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: seconds(60) } })
+  requestEmailVerification(@CurrentUser() user: { userId: string }) {
+    return this.authService.requestEmailVerification(user.userId);
+  }
+
+  @Public()
+  @Post('password/forgot')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: seconds(60) } })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Public()
+  @Post('password/reset')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: seconds(60) } })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token, dto.password);
   }
 }

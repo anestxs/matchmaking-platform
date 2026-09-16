@@ -10,6 +10,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { DiscordStrategy } from './strategies/discord.strategy';
 import { DiscordLinkStrategy } from './strategies/discord-link.strategy';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DiscordLinkStrategy } from './strategies/discord-link.strategy';
         },
       }),
     }),
+    MailModule,
   ],
 
   controllers: [AuthController],
