@@ -1,6 +1,9 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,12 +14,19 @@ import { TokenService } from './token.service';
 import { LoginDto } from './dto/login.dto';
 import { Profile } from 'passport-discord';
 import { randomInt } from 'crypto';
+import { MailService } from '../mail/mail.service';
+import { ConfigService } from '@nestjs/config';
+import { resetPasswordTemplate, verifyEmailTemplate } from '../mail/templates';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly mail: MailService,
+    private readonly config: ConfigService,
   ) {}
 
   async register({ nickname, tag, password, email }: RegisterDto) {
@@ -244,5 +254,170 @@ export class AuthService {
 
       throw error;
     }
+  }
+
+  async unlinkDiscordAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { oauthAccounts: true },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    const hasPassword = user.passwordHash !== null;
+
+    const hasOtherProvider = user.oauthAccounts.some(
+      (a) => a.provider !== 'DISCORD',
+    );
+
+    if (!hasPassword && !hasOtherProvider) {
+      throw new ConflictException(
+        'Cannot unlink your only login method. Set a password first.',
+      );
+    }
+
+    const hasDiscordAccount = user.oauthAccounts.some(
+      (a) => a.provider === 'DISCORD',
+    );
+
+    if (!hasDiscordAccount) {
+      throw new NotFoundException(
+        'No linked Discord account found for this user.',
+      );
+    }
+
+    await this.prisma.oAuthAccount.delete({
+      where: { userId_provider: { userId, provider: 'DISCORD' } },
+    });
+
+    return { success: true, message: 'Discord account unlinked successfully.' };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    currentSid?: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    if (!user.passwordHash) {
+      throw new ConflictException(
+        'No password is set for this account. Set a password first.',
+      );
+    }
+
+    if (currentPassword === newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password.',
+      );
+    }
+
+    const isCurrentPasswordValid = await argon2.verify(
+      user.passwordHash,
+      currentPassword,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect.');
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+      },
+    });
+
+    await this.tokens.revokeAllSessions(userId, currentSid);
+
+    return { success: true, message: 'Password changed successfully.' };
+  }
+
+  async requestEmailVerification(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found.');
+    }
+
+    if (!user.email) {
+      throw new ConflictException('No email address is set for this account.');
+    }
+
+    if (user.emailVerifiedAt) {
+      throw new ConflictException('Email is already verified.');
+    }
+
+    const token = await this.tokens.issueEmailVerificationToken(userId);
+    const url = `${this.config.getOrThrow<string>('FRONTEND_URL')}/verify-email?token=${token}`;
+
+    await this.mail.send(user.email, verifyEmailTemplate(url));
+
+    return { success: true, message: 'Verification email sent.' };
+  }
+
+  async verifyEmail(token: string) {
+    const userId = await this.tokens.consumeEmailVerificationToken(token);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { emailVerifiedAt: new Date() },
+    });
+
+    return { success: true, message: 'Email verified successfully.' };
+  }
+
+  async forgotPassword(email: string) {
+    const response = {
+      success: true,
+      message:
+        'If an account with that email exists, a password reset link has been sent.',
+    };
+
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user?.email || !user?.emailVerifiedAt) {
+      return response;
+    }
+
+    const token = await this.tokens.issuePasswordResetToken(user.id);
+    const url = `${this.config.getOrThrow<string>('FRONTEND_URL')}/reset-password?token=${token}`;
+
+    try {
+      await this.mail.send(user.email, resetPasswordTemplate(url));
+    } catch {
+      this.logger.error(
+        `Failed to send password reset email to user ${user.id}.`,
+      );
+    }
+
+    return response;
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const userId = await this.tokens.consumePasswordResetToken(token);
+    const passwordHash = await argon2.hash(newPassword);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
+
+    await this.tokens.revokeAllSessions(userId);
+
+    return { success: true, message: 'Password reset successfully.' };
   }
 }
