@@ -1,4 +1,3 @@
-import { AuthService } from './auth.service';
 import {
   Body,
   Controller,
@@ -12,21 +11,22 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { Public } from './decorators/public.decorator';
-import { CurrentUser } from './decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
-import type { Request, Response } from 'express';
-import { DiscordAuthGuard } from './guards/discord-auth.guard';
-import { TokenService } from './token.service';
-import { SetPasswordDto } from './dto/set-password.dto';
-import { DiscordLinkGuard } from './guards/discord-link.guard';
-import { ChangePasswordDto } from './dto/change-password.dto';
 import { seconds, Throttle } from '@nestjs/throttler';
-import { VerifyEmailDto } from './dto/verify-email.dto';
+import type { Request, Response } from 'express';
+import { AuthService } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { Public } from './decorators/public.decorator';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { DiscordAuthGuard } from './guards/discord-auth.guard';
+import { DiscordLinkGuard } from './guards/discord-link.guard';
+import { TokenService } from './token.service';
 
 @Controller('auth')
 export class AuthController {

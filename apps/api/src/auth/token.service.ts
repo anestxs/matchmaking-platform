@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { REDIS_CLIENT } from '../redis/redis.module';
-import Redis from 'ioredis';
 import { createHash, randomBytes, randomUUID } from 'crypto';
+import Redis from 'ioredis';
+import { REDIS_CLIENT } from '../redis/redis.module';
 
 interface RefreshPayload {
   sub: string;

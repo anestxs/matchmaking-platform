@@ -6,16 +6,16 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { RegisterDto } from './dto/register.dto';
-import * as argon2 from 'argon2';
-import { Prisma } from '@matchmaking/db';
-import { TokenService } from './token.service';
-import { LoginDto } from './dto/login.dto';
-import { Profile } from 'passport-discord';
-import { randomInt } from 'crypto';
-import { MailService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
+import * as argon2 from 'argon2';
+import { randomInt } from 'crypto';
+import { Profile } from 'passport-discord';
+import { Prisma } from '@matchmaking/db';
+import { PrismaService } from '../prisma/prisma.service';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { TokenService } from './token.service';
+import { MailService } from '../mail/mail.service';
 import { resetPasswordTemplate, verifyEmailTemplate } from '../mail/templates';
 
 @Injectable()
