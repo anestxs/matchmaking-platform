@@ -148,3 +148,5 @@ packages/db/generated/prisma
 
 # Local roadmap / working notes
 ROADMAP.local.md
+
+temp/*
