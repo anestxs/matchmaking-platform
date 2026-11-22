@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --background: #ffffff;
+  --surface: #f6f6fb;
+  --surface-hover: #ededf6;
+  --border: #e3e3ee;
+
+  /* text */
+  --foreground: #14141c;
+  --muted: #63637a;
+
+  /* brand */
+  --brand: #6357f0;
+  --brand-hover: #5546e8;
+  --brand-foreground: #ffffff;
+  --accent: #9e58f6;
+
+  /* status */
+  --danger: #c62828;
+  --success: #15803d;
+
+  /* effects */
+  --shine: #ffffff;
+
+  /* third-party brand colours, same in both themes */
+  --discord: #5865f2;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --background: #0d0f17;
+  --surface: #161926;
+  --surface-hover: #1d2132;
+  --border: #2a2d45;
+
+  --foreground: #e9eaf4;
+  --muted: #9094a8;
+
+  --brand: #8b7cf9;
+  --brand-hover: #a08ffb;
+  --brand-foreground: #0d0f17;
+  --accent: #5f99f8;
+
+  --danger: #f87171;
+  --success: #4ade80;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-accent: var(--accent);
+
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-shine: var(--shine);
+  --color-discord: var(--discord);
+
+  --font-sans: var(--font-geist-sans);
+}
+
+@theme {
+  --animate-shimmer: shimmer 5s ease-in-out infinite;
+  --animate-rise-in: card-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes card-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-160%);
+    }
+    35%,
+    100% {
+      transform: translateX(160%);
+    }
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}

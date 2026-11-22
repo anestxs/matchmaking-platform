@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient, PrismaPg } from '@matchmaking/db';
 import { ConfigService } from '@nestjs/config';
+import { PrismaClient, PrismaPg } from '@matchmaking/db';
 
 @Injectable()
 export class PrismaService

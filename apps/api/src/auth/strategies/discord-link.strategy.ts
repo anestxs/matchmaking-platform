@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
+import type { Request } from 'express';
 import { Strategy, Profile } from 'passport-discord';
 import { AuthService } from '../auth.service';
 import { TokenService } from '../token.service';
-import type { Request } from 'express';
 
 @Injectable()
 export class DiscordLinkStrategy extends PassportStrategy(
