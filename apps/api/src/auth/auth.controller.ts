@@ -9,6 +9,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseFilters,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -24,6 +25,7 @@ import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { DiscordLoginErrorFilter } from './filters/discord-login-error.filter';
 import { DiscordAuthGuard } from './guards/discord-auth.guard';
 import { DiscordLinkGuard } from './guards/discord-link.guard';
 import { TokenService } from './token.service';
@@ -119,6 +121,7 @@ export class AuthController {
   @Public()
   @UseGuards(DiscordAuthGuard)
   @Get('discord/callback')
+  @UseFilters(DiscordLoginErrorFilter)
   async discordAuthCallback(
     @CurrentUser() user: { userId: string },
     @Res() res: Response,

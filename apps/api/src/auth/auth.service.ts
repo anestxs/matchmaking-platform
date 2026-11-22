@@ -14,9 +14,18 @@ import { Prisma } from '@matchmaking/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { OAuthLoginException } from './exceptions/oauth-login.exception';
 import { TokenService } from './token.service';
 import { MailService } from '../mail/mail.service';
 import { resetPasswordTemplate, verifyEmailTemplate } from '../mail/templates';
+
+const ACCOUNT_INCLUDE = {
+  oauthAccounts: { select: { provider: true } },
+} satisfies Prisma.UserInclude;
+
+type UserWithAccounts = Prisma.UserGetPayload<{
+  include: typeof ACCOUNT_INCLUDE;
+}>;
 
 @Injectable()
 export class AuthService {
@@ -41,12 +50,12 @@ export class AuthService {
           email: email?.toLowerCase(),
           passwordHash,
         },
-        omit: { passwordHash: true },
+        include: ACCOUNT_INCLUDE,
       });
       const accessToken = await this.tokens.issueAccessToken(user.id);
       const refreshToken = await this.tokens.issueRefreshToken(user.id);
 
-      return { user, accessToken, refreshToken };
+      return { user: this.toPublicUser(user), accessToken, refreshToken };
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -73,11 +82,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials.');
     }
 
-    const { passwordHash: _removed, ...safeUser } = user;
     const accessToken = await this.tokens.issueAccessToken(user.id);
     const refreshToken = await this.tokens.issueRefreshToken(user.id);
 
-    return { user: safeUser, accessToken, refreshToken };
+    return { user: this.toPublicUser(user), accessToken, refreshToken };
   }
 
   async logout(refreshToken: string | undefined) {
@@ -89,12 +97,12 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      omit: { passwordHash: true },
+      include: ACCOUNT_INCLUDE,
     });
     if (!user) {
       throw new UnauthorizedException();
     }
-    return user;
+    return this.toPublicUser(user);
   }
 
   async refresh(refreshToken: string) {
@@ -106,12 +114,26 @@ export class AuthService {
       const [nickname, tag] = identifier.split('#');
       return this.prisma.user.findUnique({
         where: { nickname_tag: { nickname: nickname.toLowerCase(), tag } },
+        include: ACCOUNT_INCLUDE,
       });
     }
 
     return this.prisma.user.findUnique({
       where: { email: identifier.toLowerCase() },
+      include: ACCOUNT_INCLUDE,
     });
+  }
+
+  private toPublicUser({
+    passwordHash,
+    oauthAccounts,
+    ...profile
+  }: UserWithAccounts) {
+    return {
+      ...profile,
+      hasPassword: !!passwordHash,
+      providers: oauthAccounts.map((account) => account.provider),
+    };
   }
 
   private dummyHash: string | null = null;
@@ -139,7 +161,8 @@ export class AuthService {
     }
 
     if (!email) {
-      throw new ConflictException(
+      throw new OAuthLoginException(
+        'email_missing',
         'Email is required for Discord authentication. Please ensure your Discord account has a verified email address.',
       );
     }
@@ -174,7 +197,10 @@ export class AuthService {
           const target = error.meta?.target as string[] | undefined;
 
           if (target?.includes('email')) {
-            throw new ConflictException('Email is already in use.');
+            throw new OAuthLoginException(
+              'email_taken',
+              'Email is already in use.',
+            );
           }
           continue; // Retry on unique constraint violation for nickname and tag
         }
@@ -216,11 +242,13 @@ export class AuthService {
 
     const passwordHash = await argon2.hash(newPassword);
 
-    return await this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: userId },
       data: { passwordHash },
-      omit: { passwordHash: true },
+      include: ACCOUNT_INCLUDE,
     });
+
+    return this.toPublicUser(updatedUser);
   }
 
   async linkDiscordAccount(userId: string, profile: Profile) {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
+import { MailTemplate } from './templates';
 
 @Injectable()
 export class MailService {
@@ -14,10 +15,7 @@ export class MailService {
     });
   }
 
-  async send(
-    to: string,
-    template: { subject: string; html: string },
-  ): Promise<void> {
+  async send(to: string, template: MailTemplate): Promise<void> {
     await this.transporter.sendMail({
       from: this.config.getOrThrow<string>('MAIL_FROM'),
       to,
